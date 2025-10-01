@@ -1,5 +1,6 @@
 import os
 import requests
+import re
 
 # --- ENVIRONMENT VARIABLES ---
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
@@ -21,17 +22,17 @@ if diff_response.status_code != 200:
 
 raw_diff = diff_response.text
 
-# --- PARSE DIFF INTO FILE-TO-CHANGES STRUCTURE ---
+# --- IMPROVED PARSE OF DIFF ---
 pr_diff = {}  # { "file_path": ["changed line1", "changed line2", ...] }
-
 current_file = None
+
 for line in raw_diff.splitlines():
-    if line.startswith("diff --git"):
-        parts = line.split(" b/")
-        if len(parts) == 2:
-            current_file = parts[1].strip()
+    # Detect a file from "+++ b/<path>" which is more reliable than parsing "diff --git"
+    if line.startswith("+++ b/"):
+        current_file = line.replace("+++ b/", "").strip()
+        if current_file and current_file not in pr_diff:
             pr_diff[current_file] = []
-    elif current_file and (line.startswith("+") and not line.startswith("+++")):
+    elif current_file and line.startswith("+") and not line.startswith("+++"):
         pr_diff[current_file].append(line[1:])
 
 # --- PROMPT TEMPLATE ---
@@ -44,15 +45,14 @@ Review the following modified code and provide concise, constructive feedback:
 
 # --- GEMINI SETTINGS ---
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
-
 review_comments = []
 
 # --- LOOP FILES & SEND TO GEMINI ---
 for file_path, changes in pr_diff.items():
-    if not changes:
+    combined_snippet = "\n".join(changes).strip()
+    if not combined_snippet:
         continue
 
-    combined_snippet = "\n".join(changes)
     prompt = PROMPT_TEMPLATE.format(code=combined_snippet)
 
     g_headers = {
