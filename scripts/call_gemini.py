@@ -1,36 +1,64 @@
 import os
-import sys
-import json
 import requests
 
-diff_file = sys.argv[1]
+# --- ENVIRONMENT VARIABLES ---
+GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+REPO = os.environ["GITHUB_REPOSITORY"]     # e.g. "owner/repo"
+PR_NUMBER = os.environ["PR_NUMBER"]        # e.g. "12"
+GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 
-# Load diff JSON
-with open(diff_file) as f:
-    pr_diff = json.load(f)
+# --- GITHUB API: Fetch PR diff in patch format ---
+diff_url = f"https://api.github.com/repos/{REPO}/pulls/{PR_NUMBER}"
+headers = {
+    "Authorization": f"token {GITHUB_TOKEN}",
+    "Accept": "application/vnd.github.v3.diff"
+}
+diff_response = requests.get(diff_url, headers=headers)
 
-# Custom prompt template
+if diff_response.status_code != 200:
+    print(f"Failed to fetch PR diff: {diff_response.status_code} {diff_response.text}")
+    exit(1)
+
+raw_diff = diff_response.text
+
+# --- PARSE DIFF INTO FILE-TO-CHANGES STRUCTURE ---
+pr_diff = {}  # { "file_path": ["changed line1", "changed line2", ...] }
+
+current_file = None
+for line in raw_diff.splitlines():
+    if line.startswith("diff --git"):
+        parts = line.split(" b/")
+        if len(parts) == 2:
+            current_file = parts[1].strip()
+            pr_diff[current_file] = []
+    elif current_file and (line.startswith("+") and not line.startswith("+++")):
+        pr_diff[current_file].append(line[1:])
+
+# --- PROMPT TEMPLATE ---
 PROMPT_TEMPLATE = """
 You are an expert code reviewer.
-For the following code snippet, provide concise, constructive comments.
-Code:
+Review the following modified code and provide concise, constructive feedback:
+
 {code}
 """
 
-# Gemini API endpoint
+# --- GEMINI SETTINGS ---
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 review_comments = []
 
+# --- LOOP FILES & SEND TO GEMINI ---
 for file_path, changes in pr_diff.items():
-    # Combine all changed lines in this file
-    combined_snippet = "\n".join([c["code"] for c in changes])
+    if not changes:
+        continue
+
+    combined_snippet = "\n".join(changes)
     prompt = PROMPT_TEMPLATE.format(code=combined_snippet)
 
-    headers = {
-    "Content-Type": "application/json",
-    "X-goog-api-key": os.environ["GEMINI_API_KEY"]
-}
+    g_headers = {
+        "Content-Type": "application/json",
+        "X-goog-api-key": GEMINI_API_KEY
+    }
 
     payload = {
         "contents": [
@@ -42,30 +70,24 @@ for file_path, changes in pr_diff.items():
         ]
     }
 
-    resp = requests.post(GEMINI_URL, headers=headers, json=payload)
+    resp = requests.post(GEMINI_URL, headers=g_headers, json=payload)
     resp_json = resp.json()
 
     ai_comment = (
         resp_json.get("candidates", [{}])[0]
-          .get("content", {})
-          .get("parts", [{}])[0]
-          .get("text", "No response from Gemini.")
+            .get("content", {})
+            .get("parts", [{}])[0]
+            .get("text", "No response from Gemini.")
     )
 
-    # Save a single comment per file
     review_comments.append({
         "path": file_path,
         "body": ai_comment
     })
 
-# Post to GitHub ISSUE COMMENTS endpoint (one comment per file)
-GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
-REPO = os.environ["GITHUB_REPOSITORY"]
-PR_NUMBER = os.environ["PR_NUMBER"]
-
-GITHUB_API_URL = f"https://api.github.com/repos/{REPO}/issues/{PR_NUMBER}/comments"
-
-headers = {
+# --- POST COMMENTS BACK TO THE PR ---
+COMMENTS_URL = f"https://api.github.com/repos/{REPO}/issues/{PR_NUMBER}/comments"
+post_headers = {
     "Authorization": f"token {GITHUB_TOKEN}",
     "Accept": "application/vnd.github.v3+json",
     "Content-Type": "application/json"
@@ -73,5 +95,5 @@ headers = {
 
 for comment in review_comments:
     body = f"**Review for file:** `{comment['path']}`\n\n{comment['body']}"
-    resp = requests.post(GITHUB_API_URL, headers=headers, json={"body": body})
-    print(resp.status_code, resp.text)
+    response = requests.post(COMMENTS_URL, headers=post_headers, json={"body": body})
+    print(response.status_code, response.text)
