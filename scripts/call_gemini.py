@@ -37,23 +37,20 @@ for line in raw_diff.splitlines():
 
 # --- PROMPT TEMPLATE ---
 PROMPT_TEMPLATE = """
-You are an expert Python engineer who knows FastAPI deeply. Review the following code changes and provide feedback based on:
+You are a code review assistant focusing on FastAPI projects. Review the following diff. Pay attention to:
 
-- API route correctness (path, method, params)
-- Pydantic schema validation
-- Dependency injection / use of `Depends`
+- Type hints and correct return types for endpoints
+- Proper use of HTTP status codes and responses
+- Input validation with Pydantic (body, query, path)
 - Async functions vs sync usage consistency
+- Dependency injection and separation of concerns
 - Clear error handling and logging
-- Security concerns (e.g. input sanitization, CORS, auth)
-- Performance & scalability (database calls, ORMs, query patterns)
-- Documentation & typing (docstrings, type hints)
-- Code readability & maintainability (naming, modularity, structure)
-- Best practices to follow
+- Structuring of routers, separation into modules
 
-Here are the code changes:
+Here is the diff:
 {code}
 
-Give your feedback in sections, and for each issue suggest an alternative or example fix. Categorize issues as Critical / Moderate / Minor. Make sure to make your responses straight forward, concise and too the point.
+Provide feedback in bullet points; for each issue include the file and approximate location. Suggest best practices or code snippets to improve.
 """
 
 # --- GEMINI SETTINGS ---
