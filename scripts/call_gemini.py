@@ -37,20 +37,29 @@ for line in raw_diff.splitlines():
 
 # --- PROMPT TEMPLATE ---
 PROMPT_TEMPLATE = """
-You are a code review assistant focusing on FastAPI projects. Review the following diff. Pay attention to:
+You are reviewing a Python/FastAPI pull request. Focus only on the changes introduced in this diff:
 
-- Type hints and correct return types for endpoints
-- Proper use of HTTP status codes and responses
-- Input validation with Pydantic (body, query, path)
-- Async functions vs sync usage consistency
-- Dependency injection and separation of concerns
-- Clear error handling and logging
-- Structuring of routers, separation into modules
-
-Here is the diff:
 {code}
 
-Provide feedback in bullet points; for each issue include the file and approximate location. Suggest best practices or code snippets to improve.
+When reviewing, pay close attention to:
+
+- Type hints and return types for endpoints
+- HTTP status codes and response structures
+- Pydantic validation for body, query, and path parameters
+- Async vs sync consistency
+- Dependency injection and separation of concerns
+- Error handling and logging
+ Router organization and module structure
+
+When responding:
+
+- Be concise and get to the point
+- Use a polite, professional first-person tone
+- Provide bullet-point feedback
+- Mention the relevant file and approximate location for each issue
+- Suggest best practices or very short example snippets when needed
+- Do not include any intros or meta commentary—start directly with feedback
+
 """
 
 # --- GEMINI SETTINGS ---
