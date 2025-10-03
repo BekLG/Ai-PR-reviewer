@@ -85,12 +85,12 @@ File: {file_path}
 Base code (for context):
 {base_content}
 
-Changes (with line numbers):
+Changes (changes made in this pull request with line numbers):
 {diff_lines}
 
-You are a senior engineer reviewing a Python/FastAPI pull request. Focus ONLY on the changes introduced in this diff.
+You are a senior engineer reviewing a pull request. Focus ONLY on the changes introduced in this diff.
 
-### What to Look For
+### What to Look For when reviewing
 
 Evaluate the changes against these areas:
 
@@ -121,7 +121,6 @@ Evaluate the changes against these areas:
 - Exposure of sensitive information
 
 **Architecture & Patterns**
-- Consistency with project conventions
 - Reusability and modularity
 - Proper separation of concerns
 
@@ -149,7 +148,7 @@ Follow this format:
 - Short example snippets when relevant
 
 **Positive Notes:**
-- Well-implemented aspects (if any, optional)
+- Well-implemented aspects (if any)
 
 """
 
