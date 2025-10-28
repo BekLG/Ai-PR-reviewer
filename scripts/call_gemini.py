@@ -6,10 +6,13 @@ import re
 
 # --- ENVIRONMENT VARIABLES ---
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
-REPO = os.environ["GITHUB_REPOSITORY"]       # e.g. "owner/repo"
-PR_NUMBER = os.environ["PR_NUMBER"]          # e.g. "12"
+REPO = os.environ["GITHUB_REPOSITORY"]
+PR_NUMBER = os.environ["PR_NUMBER"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 GITHUB_EVENT_PATH = os.environ["GITHUB_EVENT_PATH"]
+BASE_COMMIT_SHA = os.getenv("BASE_SHA")
+HEAD_COMMIT_SHA = os.getenv("GITHUB_SHA")
+
 
 # --- LOAD PR EVENT TO GET BASE SHA ---
 with open(GITHUB_EVENT_PATH) as f:
@@ -17,18 +20,31 @@ with open(GITHUB_EVENT_PATH) as f:
 
 BASE_SHA = event_data["pull_request"]["base"]["sha"]
 
-# --- FETCH PR DIFF IN PATCH FORMAT ---
-diff_url = f"https://api.github.com/repos/{REPO}/pulls/{PR_NUMBER}"
+# --- FETCH DIFF FOR SPECIFIC COMMIT (OR FULL PR IF FIRST RUN) ---
 diff_headers = {
     "Authorization": f"token {GITHUB_TOKEN}",
     "Accept": "application/vnd.github.v3.diff"
 }
+
+if BASE_COMMIT_SHA:
+    # Compare only between the last and current commit
+    diff_url = f"https://api.github.com/repos/{REPO}/compare/{BASE_COMMIT_SHA}...{HEAD_COMMIT_SHA}"
+    print(f"Fetching diff between commits: {BASE_COMMIT_SHA[:7]}...{HEAD_COMMIT_SHA[:7]}")
+else:
+    # Fallback: full PR diff if BASE_SHA not provided
+    diff_url = f"https://api.github.com/repos/{REPO}/pulls/{PR_NUMBER}"
+    print("BASE_SHA not found — reviewing full PR diff.")
+
 diff_resp = requests.get(diff_url, headers=diff_headers)
 if diff_resp.status_code != 200:
-    print(f"Failed to fetch PR diff: {diff_resp.status_code} {diff_resp.text}")
+    print(f"Failed to fetch diff: {diff_resp.status_code} {diff_resp.text}")
     exit(1)
 
 raw_diff = diff_resp.text
+
+if not raw_diff.strip():
+    print("No diff detected between commits — skipping review.")
+    exit(0)
 
 # --- PARSE DIFF WITH LINE NUMBERS ---
 pr_diff = {}  # { file_path: [ {type, old_line, new_line, content} ] }
